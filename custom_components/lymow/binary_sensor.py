@@ -36,6 +36,24 @@ class LymowBinDesc(BinarySensorEntityDescription):
     description: str | None = None   # surfaced as a more-info attribute
 
 
+def _current_net(d: dict) -> int | None:
+    """currentNet, robust to netDetailInfo being a raw protobuf object.
+
+    state.py stores netDetailInfo as the protobuf message (no `.get()`), but also
+    flattens currentNet to a top-level key when present — prefer that. Calling
+    `.get()` on the protobuf object was raising AttributeError every update while a
+    mow was active (netDetailInfo populated), spamming the log and breaking the
+    WiFi/4G connectivity sensors.
+    """
+    v = d.get("currentNet")
+    if v is not None:
+        return v
+    nd = d.get("netDetailInfo")
+    if isinstance(nd, dict):
+        return nd.get("currentNet")
+    return getattr(nd, "currentNet", None)
+
+
 BINARY_SENSORS: tuple[LymowBinDesc, ...] = (
     LymowBinDesc(
         key="online",
@@ -83,7 +101,7 @@ BINARY_SENSORS: tuple[LymowBinDesc, ...] = (
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         icon="mdi:wifi",
         value_fn=lambda d: bool(d.get(F_WIFI_WORKING))
-            or (d.get("netDetailInfo") or {}).get("currentNet") == 1,
+            or _current_net(d) == 1,
         entity_registry_enabled_default=False,
     ),
     LymowBinDesc(
@@ -92,7 +110,7 @@ BINARY_SENSORS: tuple[LymowBinDesc, ...] = (
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         icon="mdi:signal-4g",
         value_fn=lambda d: bool(d.get(F_LTE_WORKING))
-            or (d.get("netDetailInfo") or {}).get("currentNet") == 2,
+            or _current_net(d) == 2,
         entity_registry_enabled_default=False,
     ),
 

@@ -30,9 +30,15 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _get_robot_ip(data: dict) -> str | None:
+    # netDetailInfo is stored as the raw protobuf message (no `.get()`); state.py
+    # flattens wifiIp to a top-level key. Read the flat key, fall back to the object
+    # via getattr — never `.get()` on the protobuf object (raised AttributeError).
+    nd = data.get(F_NET_DETAIL)
+    nd_wifi_ip = nd.get("wifiIp") if isinstance(nd, dict) else getattr(nd, "wifiIp", None)
     return (
         data.get(F_IP_ADDRESS)
-        or (data.get(F_NET_DETAIL) or {}).get("wifiIp")
+        or data.get("wifiIp")
+        or nd_wifi_ip
         or data.get("rest_ip_address")
     )
 
